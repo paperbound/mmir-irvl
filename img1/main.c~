@@ -3,6 +3,7 @@
 #include <stdint.h>
 #include <math.h>
 #include <graphics.h>
+#include <opencv/cv.h>
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb/stb_image.h"
@@ -27,16 +28,19 @@ void putrgbpixel(int x, int y, uint8_t* color)
   _fgcolor = old_color;
 }
 
-void putpixelrgb(int x, int y, uint8_t color)
+int main()
 {
-  uint8_t old_color = _fgcolor;
-  _fgcolor = color;
-  bar(x, y, x, y);
-  _fgcolor = old_color;
-}
-
-void delayandclose(float d)
-{
-  delay(d);
+  findHomography();
+  int width, height, bpp;
+  uint8_t* rgb_image = stbi_load("image.png", &width, &height, &bpp, 3);
+  initwindow(width, height);
+  for(int j=0; j<height; j++) {
+    for(int i=0; i<width; i++) {
+      putrgbpixel(i, j, rgb_image+(j*width+i)*3);
+    }
+  }
+  stbi_image_free(rgb_image);
+  delay(2000);
   closegraph();
+  return 0;
 }
