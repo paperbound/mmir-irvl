@@ -3,12 +3,24 @@
 #include <stdint.h>
 #include <math.h>
 #include <graphics.h>
+#include <SDL/SDL.h>
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb/stb_image.h"
 
+volatile bool is_init = false;
+
+uint8_t rgbto8(uint8_t* color)
+{
+  return (color[0] & 0xe0) | ((color[1] & 0xe0)>>3) | ((color[2] & 0xc0) >> 6);
+}
+
 void initwindow(int x, int y)
 {
+  if(is_init) {
+    return;
+  }
+  is_init = true;
   if(y>=0x10000 || x>=0x10000) {
     int gd = DETECT, gm;
     initgraph(&gd, &gm, NULL);
@@ -19,31 +31,51 @@ void initwindow(int x, int y)
   initgraph(&gd, &gm, NULL);
 }
 
+void update_screen()
+{
+  SDL_UpdateRect(screen, 0, 0, 0, 0);
+}
+
 void putrgbpixel(int x, int y, uint8_t* color)
 {
   uint8_t new_color = (color[0] & 0xe0) | ((color[1] & 0xe0)>>3) | ((color[2] & 0xc0) >> 6);
-  if(new_color) {
+  //if(new_color) {
     uint8_t old_color = _fgcolor;
     _fgcolor = new_color;
-    bar(x, y, x, y);
+    //bar(x, y, x, y);
+    mappixel(x,y);
     _fgcolor = old_color;
-  }
+    //}
 }
 
 void put8pixel(int x, int y, uint8_t color)
 {
-  if(color) {
+  //if(color) {
     uint8_t old_color = _fgcolor;
     _fgcolor = color;
-    bar(x, y, x, y);
+    //bar(x, y, x, y);
+    mappixel(x,y);
     _fgcolor = old_color;
+    //}
+}
+
+void clear_screen(int width, int height)
+{
+  for(int j=0; j<height; j++) {
+    for(int i=0; i<width; i++) {
+      put8pixel(i, j, 0x00);
+    }
   }
 }
 
 void delayandclose(float d)
 {
-  delay(d);
-  closegraph();
+  update_screen();
+  if(d > 0.0) {
+    delay(d);
+    closegraph();
+    is_init = false;
+  }
 }
 
 void showrgbimage(int width, int height, uint8_t* img, float delay)
@@ -68,7 +100,7 @@ void show8image(int width, int height, uint8_t* img, float delay)
   delayandclose(delay);
 }
 
-void showscale8image(int width, int height, uint8_t* img, float delay)
+int showscale8image(int width, int height, uint8_t* img, float delay)
 {
   int scale = 1;
   {
@@ -102,4 +134,5 @@ void showscale8image(int width, int height, uint8_t* img, float delay)
     }
   }
   delayandclose(delay);
+  return scale;
 }

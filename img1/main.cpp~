@@ -130,7 +130,7 @@ float pldist(Line_t l, Point_t p)
   return((float)abs(l.a*p.x+l.b*p.y+l.c))/sqrt((float)(l.a*l.a+l.b*l.b));
 }
 
-bool square(vector<Point_t>& pixels)
+bool square(vector<Point_t>& pixels, bool ir)
 {
   int size = pixels.size();
   if(size < 64) {
@@ -180,7 +180,7 @@ bool square(vector<Point_t>& pixels)
     float d3 = pldist(l3, pixels[i]);
     float d4 = pldist(l4, pixels[i]);
     float d = std::min({d1, d2, d3, d4});
-    if(d > 5.0) {
+    if(d > (ir ? 5.0 : 10.0)) {
       return false;
     }
   }
@@ -192,10 +192,12 @@ bool square(vector<Point_t>& pixels)
   return true;
 }
 
-void dot(uint8_t* img, int x, int y, int width, int height, uint8_t color)
+void dot(uint8_t* img, int x, int y, int width, int height, uint8_t color, unsigned int size)
 {
-  for(int j=0; j<7; j++) {
-    for(int i=0; i<7; i++) {
+  x -= size/2;
+  y -= size/2;
+  for(int j=0; j<size; j++) {
+    for(int i=0; i<size; i++) {
       int nx = x+i;
       int ny = y+j;
       if(nx<0 || ny<0 || nx>=width || ny>=height) {
@@ -232,28 +234,174 @@ bool on_line(Point_t p, Line_t l)
   return pldist(l, p) < 1.0;
 }
 
+array<Point_t, 8> main_logic(bool ir);
+
+cv::Point2f operator*(cv::Mat M, const cv::Point2f& p)
+{ 
+    cv::Mat_<double> src(3/*rows*/,1 /* cols */); 
+
+    src(0,0)=p.x; 
+    src(1,0)=p.y; 
+    src(2,0)=1.0; 
+
+    cv::Mat_<double> dst = M*src; //USE MATRIX ALGEBRA 
+    return cv::Point2f(dst(0,0),dst(1,0)); 
+}
+
+void array_rotate(array<Point_t, 4>& points, int t)
+{
+  while(t--) {
+    Point_t a = points[0];
+    points[0] = points[1];
+    points[1] = points[2];
+    points[2] = points[3];
+    points[3] = a;
+  }
+}
+
+void array_mirror(array<Point_t, 4>& points)
+{
+  Point_t a = points[1];
+  points[1] = points[3];
+  points[3] = a;
+}
+
+bool direction(Point_t a, Point_t b, Point_t c)
+{
+  return (a.x-c.x)*(b.y-c.y)-(a.y-c.y)*(b.x-c.x) < 0;
+}
+
+void rotate_points(array<Point_t, 8>& points)
+{
+  array<Point_t, 4>   big_square = {points[0], points[1], points[2], points[3]};
+  array<Point_t, 4> small_square = {points[4], points[5], points[6], points[7]};
+  Point_t   big_center = Point_t{(  big_square[0].x+  big_square[1].x+  big_square[2].x+  big_square[3].x)/4, (  big_square[0].y+  big_square[1].y+  big_square[2].y+  big_square[3].y)/4};
+  Point_t small_center = Point_t{(small_square[0].x+small_square[1].x+small_square[2].x+small_square[3].x)/4, (small_square[0].y+small_square[1].y+small_square[2].y+small_square[3].y)/4};
+  int md = INT_MAX;
+  int mc = -1;
+  for(int i=0; i<4; i++) {
+    int d = pdist2(big_square[i], small_center);
+    if(d < md) {
+      md = d;
+      mc = i;
+    }
+  }
+  array_rotate(big_square, mc);
+  if(pdist2(big_square[3], small_center) < pdist2(big_square[1], small_center)) {
+    array_mirror(big_square);
+  }
+  if(direction(big_square[0], big_square[1], big_center)) {
+    array_mirror(big_square);
+    array_rotate(big_square, 3);
+  }
+  md = INT_MAX;
+  mc = -1;
+  for(int i=0; i<4; i++) {
+    int d = pdist2(small_square[i], big_square[0]);
+    if(d < md) {
+      md = d;
+      mc = i;
+    }
+  }
+  array_rotate(small_square, mc);
+  if(pdist2(small_square[3], big_square[1]) < pdist2(small_square[1], big_square[1])) {
+    array_mirror(small_square);
+  }
+  points = {big_square[0], big_square[1], big_square[2], big_square[3], small_square[0], small_square[1], small_square[2], small_square[3]};
+}
+
 int main()
 {
+  printf("a\n");
+  array<Point_t, 8> ir  = main_logic(true);
+  array<Point_t, 8> vis = main_logic(false);
+  printf("b\n");
+  rotate_points(ir);
+  rotate_points(vis);
+  printf("c\n");
+  vector<cv::Point2f> a;
+  vector<cv::Point2f> b;
+  for(int i=0; i<8; i++) {
+    a.push_back(cv::Point2f{(float)(ir[i].x), (float)(ir[i].y)});
+    b.push_back(cv::Point2f{(float)(vis[i].x), (float)(vis[i].y)});
+  }
+  cv::Mat trans = cv::findHomography(b, a);
+  int width_ir, height_ir, bpp_ir;
+  uint8_t* image_ir = stbi_load("ir.jpg", &width_ir, &height_ir, &bpp_ir, 3);
+  int width_vis, height_vis, bpp_vis;
+  uint8_t* image_vis = stbi_load("vis.jpg", &width_vis, &height_vis, &bpp_vis, 3);
+  //uint8_t* image8 = (uint8_t*)malloc(width_ir*height_ir);
+  uint8_t* image8 = (uint8_t*)malloc(width_vis*height_vis);
+  printf("e\n");
+  for(int j=0; j<height_vis; j++) {
+    for(int i=0; i<width_vis; i++) {
+      uint8_t* vis_pixel_color = image_vis+(j*width_vis+i)*3;
+      image8[j*width_vis+i] = rgbto8(vis_pixel_color);
+      //image8t[j*width_vis+i] = 0x00;
+      cv::Point2f pixel_vis_cord = cv::Point2f{(float)i, (float)j};
+      cv::Point2f pixel_ir_cord = trans*pixel_vis_cord;
+      if(pixel_ir_cord.x < 0 || pixel_ir_cord.y < 0 || pixel_ir_cord.x > width_ir-1 || pixel_ir_cord.y > height_ir-1) {
+        continue;
+      }
+      int x = (int)roundf(pixel_ir_cord.x);
+      int y = (int)roundf(pixel_ir_cord.y); // TODO replace with someting beter like a liner combination
+      uint8_t* ir_pixel_color = image_ir +(y*width_ir+x)*3;
+      if(ir_pixel_color[0] > 96 && ir_pixel_color[1] > 96) {
+        image8[j*width_vis+i] = rgbto8(ir_pixel_color);
+      }
+      
+    }
+  }
+  printf("f\n");
+  stbi_image_free(image_ir);
+  printf("f2\n");
+  stbi_image_free(image_vis);
+  //int scale = showscale8image(width_vis, height_vis, image8t, -1);
+  /*dot(image8, vis[0].x, vis[0].y, width_vis, height_vis, 0x03, 21);
+  dot(image8, vis[1].x, vis[1].y, width_vis, height_vis, 0x1c, 21);
+  dot(image8, vis[2].x, vis[2].y, width_vis, height_vis, 0xe0, 21);
+  dot(image8, vis[3].x, vis[3].y, width_vis, height_vis, 0xff, 21);*/
+  /*dot(image8, ir[0].x, ir[0].y, width_ir, height_ir, 0x03, 21);
+  dot(image8, ir[1].x, ir[1].y, width_ir, height_ir, 0x1c, 21);
+  dot(image8, ir[2].x, ir[2].y, width_ir, height_ir, 0xe0, 21);
+  dot(image8, ir[3].x, ir[3].y, width_ir, height_ir, 0xff, 21);*/
+  printf("g\n");
+  showscale8image(width_vis, height_vis, image8, 2000);
+  printf("h\n");
+  //show8image(width_ir, height_ir, image8, 2000);
+  free(image8);
+  printf("i\n");
+  /*setfontcolor(GREEN);
+  for(int i=0; i<8; i++) {
+    char str[256];
+    sprintf(str, "%d", i);
+    outtextxy(vis[i].x/scale, vis[i].y/scale, str);
+  }
+  delayandclose(20000);*/
+  return 0;
+}
+
+array<Point_t, 8> main_logic(bool ir)
+{
   int width, height, bpp;
-  bool ir = false;
   uint8_t* imagergb = stbi_load(ir ? "ir.jpg" : "vis.jpg", &width, &height, &bpp, 3);
   uint8_t* image8 = (uint8_t*)malloc(width*height);
   for(int j=0; j<height; j++) {
     for(int i=0; i<width; i++) {
       uint8_t* colorrgb = imagergb+(j*width+i)*3;
       uint8_t* color8 = image8+j*width+i;
-      if((ir && colorrgb[2] > 96) || (!ir && colorrgb[0] < 128 && colorrgb[1] < 128 && colorrgb[2] < 128)) {//96
+      if((ir && !(colorrgb[2] > 64 && colorrgb[0] < 224 && colorrgb[1] < 224)) || (!ir && colorrgb[0] < 128 && colorrgb[1] < 128 && colorrgb[2] < 128)) {//96
         *color8 = 0xff;
       } else {
         *color8 = 0x00;
       }
     }
   }
-  //showrgbimage(width, height, imagergb, 10000);
+  //showrgbimage(width, height, imagergb, 2000);
   stbi_image_free(imagergb);
-  //show8image(width, height, image8, 10000);
-  //free(image8);
-  //return 0;
+  /*show8image(width, height, image8, 10000);
+  free(image8);
+  return 0;*/
   for(int j=0; j<height; j++) {
     for(int i=0; i<width; i++) {
       int pos = j*width+i;
@@ -332,10 +480,10 @@ int main()
       if(image8[j*width+i] == 0xe0) {
         vector<Point_t> pixels;
         countorfill(image8, i, j, width, height, pixels);
-        if(square(pixels)) {
+        if(square(pixels, ir)) {
           squares.push_back(pixels);
           /*for(int k=0; k<4; k++) {
-            dot(image8, pixels[k].x-3, pixels[k].y-3, width, height);
+            dot(image8, pixels[k].x-3, pixels[k].y-3, width, height, 0x1c);
           }*/
         }
         /*vector<cv::Point2f> pixels;
@@ -352,14 +500,66 @@ int main()
       }
     }
   }
-  /*{
+  /*show8image(width, height, image8, 10000);
+  free(image8);
+  return 0;
+  {
     int size = squares.size();
     for(int i=0; i<size; i++) {
       for(int k=0; k<4; k++) {
         dot(image8, squares[i][k].x-3, squares[i][k].y-3, width, height, 0xe0);
       }
     }
-  }*/
+  }
+  show8image(width, height, image8, 10000);
+  free(image8);
+  return 0;*/
+
+  //FAKE QR CODE -----------------------------------------------------------------------------------------------------------------------------
+  vector<Point_t> big_square;
+  vector<Point_t> small_square;
+  array<Point_t, 8> ret;
+  {
+    int size = squares.size();
+    vector<array<int, 2> > areas;
+    for(int i=0; i<size; i++) {
+      areas.push_back({area2(squares[i]), i});
+    }
+    sort(areas.begin(), areas.end());
+    int last = size-1;
+    int lasti = areas[last][1];
+    Point_t last_center = Point_t{(squares[lasti][0].x + squares[lasti][lasti].x + squares[lasti][2].x + squares[lasti][3].x)/4, (squares[lasti][0].y + squares[lasti][1].y + squares[lasti][2].y + squares[lasti][3].y)/4};
+    int closesti = -1;
+    int closestd = INT_MAX;
+    for(int i=0; i<size; i++) {
+      if(i == lasti) {
+        continue;
+      }
+      int x = squares[i][0].x + squares[i][1].x + squares[i][2].x + squares[i][3].x;
+      int y = squares[i][0].y + squares[i][1].y + squares[i][2].y + squares[i][3].y;
+      int d = pdist2(Point_t{x/4, y/4}, last_center);
+      if(d < closestd) {
+        closestd = d;
+        closesti = i;
+      }
+    }
+    big_square = squares[lasti];
+    small_square = squares[closesti];
+    ret = {big_square[0], big_square[1], big_square[2], big_square[3], small_square[0], small_square[1], small_square[2], small_square[3]};
+  }
+  return ret;
+  /*{
+    for(int k=0; k<4; k++) {
+      dot(image8, big_square[k].x-3, big_square[k].y-3, width, height, 0x1c);
+      dot(image8, small_square[k].x-3, small_square[k].y-3, width, height, 0x1c);
+    }
+  }
+  show8image(width, height, image8, 10000);
+  free(image8);
+  return 0;
+
+  //KEYBORD CODE -----------------------------------------------------------------------------------------------------------------------------
+  
   {
     int size = squares.size();
     vector<int> areas;
@@ -490,5 +690,5 @@ int main()
   //showscale8image(width, height, image8, 500);
   show8image(width, height, image8, 10000);
   free(image8);
-  return 0;
+  return 0;*/
 }
