@@ -1,3 +1,7 @@
+# CMake Files
+CMakeCache.txt
+CmakeFiles
+
 # Prerequisites
 *.d
 

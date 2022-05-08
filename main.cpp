@@ -1,35 +1,22 @@
+#include <opencv2/core.hpp>
+#include <opencv2/imgcodecs.hpp>
+#include <opencv2/highgui.hpp>
 #include <iostream>
-#include <array>
-#include <opencv/cv.h>
-
-extern "C"
-{
-#include "extra.c"
-}
-
-using namespace std;
-
+using namespace cv;
 int main()
 {
-  /*vector<cv::Point2f> a;
-  vector<cv::Point2f> b;
-  cv::findHomography(a, b);*/
-  int width, height, bpp;
-  bool ir = false;
-  uint8_t* rgb_image = stbi_load(ir ? "ir.jpg" : "vis.jpg", &width, &height, &bpp, 3);
-  initwindow(width, height);
-  for(int j=0; j<height; j++) {
-    for(int i=0; i<width; i++) {
-      uint8_t* color = rgb_image+(j*width+i)*3;
-      if((ir && color[2] > 96) || (!ir && (color[0] < 128 && color[1] < 128 && color[2] < 128))) {
-        putpixelrgb(i, j, 0xff);
-      } else {
-        putpixelrgb(i, j, 0x00);
-      }
+    std::string image_path = samples::findFile("vis.jpg");
+    Mat img = imread(image_path, IMREAD_COLOR);
+    if(img.empty())
+    {
+        std::cout << "Could not read the image: " << image_path << std::endl;
+        return 1;
     }
-  }
-  stbi_image_free(rgb_image);
-  delayandclose(5000);
-  //cout << "Hello World" << endl;
-  return 0;
+    imshow("Display window", img);
+    int k = waitKey(0); // Wait for a keystroke in the window
+    if(k == 's')
+    {
+        imwrite("starry_night.png", img);
+    }
+    return 0;
 }
