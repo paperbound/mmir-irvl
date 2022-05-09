@@ -2,6 +2,7 @@
 
 project(mmir-irvl)
 
+cmake_minimum_required(VERSION 3.23)
 set(CMAKE_CXX_STANDARD 11)
 set(OpenCV_DIR /opt/homebrew/Cellar/opencv/4.5.5_2/lib/cmake/opencv4)
 find_package(OpenCV REQUIRED)
