@@ -4,6 +4,8 @@
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb/stb_image.h"
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#include "stb/stb_image_write.h"
 
 // extern "C"
 // {
@@ -338,6 +340,7 @@ int main()
   uint8_t* image8 = (uint8_t*)malloc(width_vis*height_vis);
   uint8_t* image8ir = (uint8_t*)malloc(width_ir*height_ir);
   uint8_t* image8vis = (uint8_t*)malloc(width_vis*height_vis);
+  uint8_t* imageFinal = (uint8_t*)malloc(width_vis*height_vis*3);
   printf("e\n");
   for(int j=0; j<height_ir; j++) {
     for(int i=0; i<width_ir; i++) {
@@ -350,7 +353,11 @@ int main()
       uint8_t* vis_pixel_color = image_vis+(j*width_vis+i)*3;
       //      image8[j*width_vis+i] = rgbto8(vis_pixel_color);
       //      image8vis[j*width_vis+i] = rgbto8(vis_pixel_color);
-
+      uint8_t* imgp = imageFinal+(j * width_vis + i)*3;
+      imgp[0] = vis_pixel_color[0];
+      imgp[1] = vis_pixel_color[1];
+      imgp[2] = vis_pixel_color[2];
+ 
       //image8t[j*width_vis+i] = 0x00;
       cv::Point2f pixel_vis_cord = cv::Point2f{(float)i, (float)j};
       cv::Point2f pixel_ir_cord = trans*pixel_vis_cord;
@@ -362,10 +369,15 @@ int main()
       uint8_t* ir_pixel_color = image_ir +(y*width_ir+x)*3;
       if(ir_pixel_color[0] > 96 && ir_pixel_color[1] > 96) {
 	      //        image8[j*width_vis+i] = rgbto8(ir_pixel_color);
+	      imgp[0] = ir_pixel_color[0];
+	      imgp[1] = ir_pixel_color[1];
+	      imgp[2] = ir_pixel_color[2];
       }
 
     }
   }
+  stbi_write_png("out.png", width_vis, height_vis, 3, imageFinal, width_vis*3);
+  free(imageFinal);
   //printf("f\n");
   stbi_image_free(image_ir);
   //printf("f2\n");
