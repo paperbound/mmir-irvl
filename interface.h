@@ -6,19 +6,9 @@ typedef struct image{
   uint8_t* image; // should point to 'width'*'height'*3 bytes of memory
 } image_t;
 
-// The interface is responsible to create and free the data_t struct
-typedef struct data{
-  //stuff
-} data_t;
-
-// Will read from the image_t (assuming it is a ir image of the marker) and create a data_t for future use.
-// Will read from img but not free it. (You are alowed to free the image_t struct if you want)
-data_t evaluate_ir(image_t* img);
-
-// Will update the (visible) image in image_t with data from the ir image.
-// Will read and write to img, but not free it.
-// Will read from data, but not free it. (You can reuse the data_t struct if you want)
-void update_vis(image_t* img, data_t* data);
-
-// Will free the data_t struct, please do not use it or any copy from it again.
-void free_data(data_t data);
+// Assumes that image_a is the visible image, and that image_b is the ir image.
+// Assumes that image_b has our marker in the image.
+// image_a will be updated width the overlay derived from image_b.
+// image_a don't have to have our marker in the image.
+// This function will not free image_b.
+void merge_images(image_t* image_a, image_t* image_b);
